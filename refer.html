@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ZIM - Code Creativity</title>
+
+    <!-- zimjs.com - JavaScript Canvas Framework -->
+    <script type="module">
+      import zim from "https://zimjs.org/cdn/016/zim";
+
+      // REFERENCES for ZIM at https://zimjs.com
+      // see https://zimjs.com/intro.html for an intro example
+      // see https://zimjs.com/learn.html for video and code tutorials
+      // see https://zimjs.com/docs.html for documentation
+      // see https://codepen.io/topic/zim/ for ZIM on CodePen
+
+      const frame = new Frame(
+        FIT,
+        768,
+        1024,
+        purple,
+        black,
+        ready,
+        "gf_Paytone+One"
+      );
+      function ready() {
+        // given F (Frame), S (Stage), W (width), H (height)
+        // put code here
+
+        // ZIM loop - very versatile
+        loop(5, (i) => {
+          // start with radius 200 and increase by 100 each time
+          new Circle(200 + i * 100, interstellar.toAlpha(0.15))
+            .center()
+            // prop, start, min, max, minTime, maxTime
+            .wiggle("scale", 1, 0.01, 0.03, 1, 2);
+        });
+
+        new LabelOnArc("Rock, Paper, Scissors", 60, "Paytone One", white, 310)
+          .center()
+          .alp(0.9)
+          .wiggle("rotation", 0, 1, 3, 1.5, 2.5);
+
+        const options = [
+          new Emoji("✊", 250),
+          new Emoji("✋", 250),
+          new Emoji("✌️", 250),
+        ];
+        STYLE = { align: CENTER, once: true };
+        const counter = new Label("1", 250, "Paytone One", pink)
+          .sca(0)
+          .centerReg();
+
+        let answer;
+        // ZIM interval
+        // like setInterval but order switched and in seconds
+        // also, can specify how many times to run and to start right away
+        interval(
+          6.5,
+          () => {
+            if (answer) answer.removeFrom();
+            counter.text = 1;
+            counter
+              .sca(0)
+              .center()
+              .animate({
+                props: { scale: 1 },
+                ease: "elasticOut",
+                time: 0.9,
+                loopWait: 0.1,
+                loopCount: 3,
+                loopCall: () => {
+                  counter.text = Number(counter.text) + 1;
+                },
+                call: () => {
+                  counter.removeFrom();
+                  // ZIM DUO
+                  // here we animate() with regular parameters in order
+                  answer = pluck(options)
+                    .sca(0)
+                    .centerReg()
+                    .animate({ scale: 1 }, 1, "elasticOut");
+                  // here we animate using a single configuration object
+                  // with properties that match the parameter names
+                  score.animate({
+                    wait: 0.5,
+                    props: { alpha: 0.9 },
+                    time: 0.5,
+                    rewindWait: 1.6,
+                    rewind: true,
+                  });
+                },
+              });
+          },
+          null,
+          true
+        ); // how many times, start right away
+
+        new LabelOnArc("Keep your own score", 30, null, white, -360)
+          .alp(0.5)
+          .center()
+          .wiggle("rotation", 0, 1, 3, 1.5, 2.5);
+
+        const wrong = new Button({
+          label: 0,
+          backgroundColor: red,
+          width: 120,
+        }).tap(() => {
+          wrong.text = Number(wrong.text) + 1;
+        });
+        const tie = new Button({
+          label: 0,
+          backgroundColor: yellow.darken(0.1),
+          width: 120,
+        }).tap(() => {
+          tie.text = Number(tie.text) + 1;
+        });
+        const right = new Button({
+          label: 0,
+          backgroundColor: green,
+          width: 120,
+        }).tap(() => {
+          right.text = Number(right.text) + 1;
+          emitter.spurt(15);
+        });
+
+        // what to tile, cols, rows, spacingH, spacingV, unique
+        // unique will tile each thing in an array
+        // without unique, this would randomly pick an element from array to tile
+        const score = new Tile([wrong, tie, right], 3, 1, 30, 0, true)
+          .alp(0.1)
+          .sca(0.7)
+          .pos(0, 50, CENTER, BOTTOM);
+
+        const emitter = new Emitter({
+          // button is at bottom so shoot more up (0 is to right so -90 is up)
+          angle: { min: -90 - 70, max: -90 + 70 },
+          startPaused: true,
+        })
+          .center(right)
+          .addTo(S)
+          .mov(0, -20);
+
+        F.madeWith({ box: faint, color: white.toAlpha(0.4) })
+          .sca(1.4)
+          .pos(30, 20, RIGHT, BOTTOM);
+      }
+
+      // Docs for items used:
+      // https://zimjs.com/docs.html?item=Frame
+      // https://zimjs.com/docs.html?item=Circle
+      // https://zimjs.com/docs.html?item=Label
+      // https://zimjs.com/docs.html?item=LabelOnArc
+      // https://zimjs.com/docs.html?item=Emoji
+      // https://zimjs.com/docs.html?item=Button
+      // https://zimjs.com/docs.html?item=tap
+      // https://zimjs.com/docs.html?item=animate
+      // https://zimjs.com/docs.html?item=wiggle
+      // https://zimjs.com/docs.html?item=loop
+      // https://zimjs.com/docs.html?item=pos
+      // https://zimjs.com/docs.html?item=mov
+      // https://zimjs.com/docs.html?item=alp
+      // https://zimjs.com/docs.html?item=sca
+      // https://zimjs.com/docs.html?item=addTo
+      // https://zimjs.com/docs.html?item=removeFrom
+      // https://zimjs.com/docs.html?item=centerReg
+      // https://zimjs.com/docs.html?item=center
+      // https://zimjs.com/docs.html?item=Tile
+      // https://zimjs.com/docs.html?item=Emitter
+      // https://zimjs.com/docs.html?item=interval
+      // https://zimjs.com/docs.html?item=darken
+      // https://zimjs.com/docs.html?item=toAlpha
+      // https://zimjs.com/docs.html?item=STYLE
+    </script>
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+  </head>
+  <body></body>
+</html>
