@@ -11,7 +11,7 @@
 
       // Create a new ZIM Frame that fits the window.
       // The frame is set to a 1024×1024 size (with black background and white text).
-      new Frame(FIT, 1024, 1024, "#030175", black, ready, "gf_Paytone+One");
+      new Frame(FIT, 1024, 1024, "#030175", black, ready, "gf_Rubik+Pixels");
 
       // The main ready() function runs when the frame is ready.
       function ready() {
@@ -44,8 +44,8 @@
 
         const title = new LabelOnArc(
           "The Cosmic Dance",
-          60,
-          "Paytone One",
+          80,
+          "Rubik+Pixels",
           white,
           310
         )
@@ -55,8 +55,8 @@
 
         const playButton = new LabelOnArc(
           "Play to learn",
-          30,
-          null,
+          40,
+          "Rubik+Pixels",
           white,
           -360
         )
@@ -784,11 +784,11 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         const congratsLabel = new LabelOnArc(
           "Solar System Completed!",
           40,
-          "Paytone One",
+          "Rubik+Pixels",
           white,
           310
         )
-          .centerReg(endPage)
+          .center(endPage)
           .pos(0, -100)
           .alp(0.9)
           .wiggle("rotation", 0, 1, 3, 1.5, 2.5);
@@ -815,13 +815,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
           .wiggle("scale", 1, 0.01, 0.03, 1, 2);
         
         
-        const restartLabel = new Label({
-          text: "Restart",
-          size: 30,
-          color: white,
-          align: "center",
-          valign: "center"
-        })
+        const restartLabel = new Label(
+          "Restart",
+          30,
+          "Rubik+Pixels",
+          white,
+        )
           .center(endPage)
           .alp(0.9);
         
