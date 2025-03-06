@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Solar System Formation - Final Orbits & Spin</title>
+    <script type="module">
+      // Import ZIM.js modules for physics and visual effects
+      //import zim from "https://zimjs.org/cdn/017/zim";
+      import zim from "https://zimjs.org/cdn/017/zim_physics";
+      import piz from "https://zimjs.org/cdn/017/zim_pizzazz";
+
+      // Create a new ZIM Frame that fits the window.
+      // The frame is set to a 1024×1024 size (with black background and white text).
+      new Frame(FIT, 1024, 1024, "#030175", black, ready, "gf_Paytone+One");
+
+      // The main ready() function runs when the frame is ready.
+      function ready() {
+        // ZIM provides these globals: F (Frame), S (Stage), W (width), H (height)
+
+        //-----------------------------------------
+        // Create three main page containers: homePage, gamePage, endPage.
+        //-----------------------------------------
+        const homePage = new Container().center();
+        const gamePage = new Container().center().alp(0);
+        const endPage = new Container().center().alp(0);
+
+        //-----------------------------------------
+        // (1) HOME PAGE: Display the question and "Get to know" button.
+        //-----------------------------------------
+        loop(5, (i) => {
+          
+          let alpha;
+          if (i === 0) {
+            alpha = 0.9; 
+          } else if (i === 1) {
+            alpha = 0.3; 
+          } else {
+            alpha = 0.6 * Math.pow(0.6, i-1); 
+          }
+          new Circle(200 + i * 100, black.toAlpha(alpha))
+            .center(homePage)
+            .wiggle("scale", 1, 0.01, 0.03, 1, 2);
+        });
+
+        const title = new LabelOnArc(
+          "The Cosmic Dance",
+          60,
+          "Paytone One",
+          white,
+          310
+        )
+          .center(homePage)
+          .alp(0.9)
+          .wiggle("rotation", 0, 1, 3, 1.5, 2.5);
+
+        const playButton = new LabelOnArc(
+          "Play to learn",
+          30,
+          null,
+          white,
+          -360
+        )
+          .alp(0.8)
+          .center(homePage)
+          .wiggle("rotation", 0, 1, 3, 1.5, 2.5);
+
+        //Shader for the sun
+        const fragment = `
+// If you want to use this shader in a space whatsever feel free!
+// CC-BY-3.0 Johannes Jendersie
+//
+// General technical overview:
+// First there is a fractal value noise (2d) which is wrapped onto a sphere.
+// This noise can be interpreted as temperature which is color mapped
+// at the end. A third noise dimension is used for the time.
+// Then, solar storms are added by raymarching the surrounding of the sphere
+// by a combination of different step strategies:
+//   * Using ray intersections with larger spheres
+//   * Using ray intersections with cones of different opening angle
+//     which start in the sun and are oriented towards the camera.
+// The first strategie gives good results for perpendicular rays,
+// whereas the second yields artifact free results in the tangential plane.
+// Both are combined by interpolation to create a smooth animated radial
+// burst effect.
+
+// The constants below are meant to be set from a game or other application side.
+const vec3 SUN_CENTER = vec3(0.0);
+const vec3 CAM_POS = vec3(0.0, 0.0, 8.0);
+const float SUN_RADIUS = 0.9;
+const float STORM_RADIUS = 0.7;
+
+// Get the closest point between ray and sphere. If the ray hits the sphere
+// this is a point on the surface. Otherwise, it is in the tangential plane.
+vec3 raySphereCP(vec3 spherePos, float radius, vec3 rayOrigin, vec3 rayDirection, out float mask, out float t, out float r)
+{
+    vec3 p = spherePos - rayOrigin;
+    // Distance to the closest point between ray and sphere
+	t = dot( rayDirection, p );
+    // Distance between ray origin and center
+    float l = dot( p, p );
+    // If inside the root is positive. Go back to the surface in this case
+    r = l - t * t;
+    mask = radius * radius <= r ? 0.0 : 1.0;
+    t -= sqrt(max(0.0, radius * radius - r));
+	return rayOrigin + rayDirection * t;
+}
+
+// Find ray-cone intersection assuming the rays origin is on the cone axis.
+float simpleRayCone(vec3 rayOToConeO, vec3 rayDirection, float coneAngle, float sinConeAngle, float rcDist)
+{
+    // Compute the ray-to-cone side length of the triangle (RO, CO, intersection)
+    // using the sin rule.
+    float sinC = sin(3.1415926 - acos(dot(rayDirection, rayOToConeO) / rcDist) - coneAngle);
+    return sinConeAngle * rcDist / sinC;
+}
+
+
+float hash(vec3 p) {
+    p = fract(p * vec3(123.34, 456.21, 789.92));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y * p.z);
+}
+
+float noise(vec3 x) {
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+    f = f*f*(3.0-2.0*f);
+    
+    float n000 = hash(p);
+    float n100 = hash(p + vec3(1.0, 0.0, 0.0));
+    float n010 = hash(p + vec3(0.0, 1.0, 0.0));
+    float n110 = hash(p + vec3(1.0, 1.0, 0.0));
+    float n001 = hash(p + vec3(0.0, 0.0, 1.0));
+    float n101 = hash(p + vec3(1.0, 0.0, 1.0));
+    float n011 = hash(p + vec3(0.0, 1.0, 1.0));
+    float n111 = hash(p + vec3(1.0, 1.0, 1.0));
+    
+    return mix(
+        mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+        mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y),
+        f.z
+    );
+}
+
+float sunSurfaceNoise(vec3 spos, float time)
+{
+    float s = 0.28;
+    float detail = 3.0;
+    for(int i = 0; i < 4; ++i)
+    {
+        float warp = noise(spos*8.0 * detail + time);
+        float n = noise(vec3(spos.xy * detail / spos.z + vec2(warp, 0.0), time * detail / 10.0 + float(i) * 0.618033989));
+        n = pow(n, 5.0-float(i));
+        s += n / detail;
+        detail *= 1.847;
+    }
+    return s;
+}
+
+// AAARRRG: no for loop with variable count in WebGL. May use only one function with 2 or 4 octaves.
+float sunSurfaceNoise2(vec3 spos, float time)
+{
+    float s = 0.28;
+    float detail = 3.0;
+    for(int i = 0; i < 2; ++i)
+    {
+        float warp = noise(spos*8.0 * detail + time);
+        float n = noise(vec3(spos.xy * detail / spos.z + vec2(warp, 0.0), time * detail / 10.0 + float(i) * 0.618033989));
+        n = pow(n, 5.0-float(i));
+        s += n / detail;
+        detail *= 1.847;
+    }
+    return s;
+}
+
+// Compute solar storm heat for a single point somewhere outside the
+// sphere.
+float solarStorm(vec3 pos, float time)
+{
+    float l = length(pos);
+    float surfaceDist = (l - SUN_RADIUS) / STORM_RADIUS;
+    float f = sunSurfaceNoise2(pos / l, time - surfaceDist * 8.0 * STORM_RADIUS) - surfaceDist * surfaceDist - 0.35;
+    return max(0.0, f);
+}
+
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    float time = iTime * 0.5;
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    uv -= 0.5;
+    uv.x *= iResolution.x / iResolution.y;
+    
+    vec3 viewDir = normalize(vec3(uv, -3.0));
+    float mask = 0.0, t, r;
+    vec3 spos = raySphereCP(SUN_CENTER, SUN_RADIUS, CAM_POS, viewDir, mask, t, r);
+    
+    float value = 0.0;
+
+    // Noise on the sphere surface itself (masked in non sphere regions)
+    float s = sunSurfaceNoise(spos, time);
+    value = s * mask;
+    
+    // Extremly bright areas...
+    value *= 1.9;
+    value = pow(value, 4.0) * 5.0;
+    if(value > 5.0) value *= 8.0;
+    
+    vec3 camToSun = SUN_CENTER - CAM_POS;
+    float dist = length(camToSun);
+    float cosMax = SUN_RADIUS / dist;
+    float maxAngle = acos(cosMax);
+    float cosVtimesL = dot( viewDir, camToSun );
+    float cosVMax = t / dist;
+    
+    // Solar storms
+    float storm = 0.0;
+    for(int i = 1; i <= 9; ++i)
+    {
+        float step = (float(i) ) * 0.02;
+        
+        // Projection to another sphere with a larger radius:
+        // good quality for bursts in view direction.
+        float radius = SUN_RADIUS + step;
+        float t0 = (cosVtimesL - sqrt(max(0.0, radius * radius - r)));
+        
+        // Projection to a cone starting in the sun center and pointing into
+        // viewer direction: good quality for tangential bursts.
+        float angle = float(i) / 11.0 * maxAngle;
+        float t1 = simpleRayCone(camToSun, viewDir, angle, sin(angle), dist);
+        
+        float tf = mix(t1, t0, pow(max(cosVtimesL / dist - cosVMax, 0.0) / (1.0 - cosVMax), 5.0));
+        vec3 spacePos = CAM_POS + viewDir * tf;
+        s = solarStorm(spacePos, time);
+        storm += s * s;
+    }
+    value += storm * 300.0;
+    
+   
+    vec3 sunColor = value * vec3(1.0, 0.2, 0.05);
+    
+    
+    float glow = 0.02 / (length(uv) + 0.01);
+    vec3 glowColor = vec3(1.0, 0.3, 0.05) * glow * glow * 0.5;
+    
+    
+    float alpha = smoothstep(0.01, 0.05, length(sunColor));
+    
+    
+    fragColor = vec4(sunColor + glowColor, alpha);
+}
+`;
+        //shader for background
+        const fragment2 = `
+          // gridbasedparticles by ircss
+          float rand(vec2 co){
+              return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+          }
+
+          vec4 permute(in vec4 x)
+          {
+          return mod ((34.0 * x + 1.0) * x , 289.0);   
+          }
+
+          vec2 celluar2x2( vec2 P) {
+              
+              float pp =  7.0; 
+            float K = 1.0/pp;
+            float K2 = 0.5/pp;
+            float jitter = 0.8 ; // jitter 1.0 makes F1 wrong more often
+            vec2 Pi = mod(floor(P), 289.0) ;
+            vec2 Pf = fract(P);
+            vec4 Pfx = Pf.x + vec4(-0.5, -1.5, -0.5, -1.5);
+            vec4 Pfy = Pf.y + vec4(-0.5, -0.5, -1.5, -1.5);
+            vec4 p = permute (Pi.x + vec4(0.0 , 1.0, 0.0, 1.0));
+            p = permute (p + Pi.y + vec4(0.0 , 0.0, 1.0, 1.0));
+            vec4 ox = mod(p, pp) * K + K2;
+            vec4 oy = mod(floor(p * K) ,pp) * K + K2;
+            vec4 dx = Pfx + jitter * ox;
+            vec4 dy = Pfy + jitter * oy;
+            vec4 d = dx * dx + dy * dy; // distances squared
+            // Cheat and pick only F1 for the return value
+            d.xy = min(d.xy, d.zw);
+            d.x = min(d.x, d.y);
+            return d.xx; // F1 duplicated , F2 not computed
+          
+              
+          }
+
+          void DrawAParticleSet(inout vec4 color, vec2 uv, float size ){
+            float aCellLenght = size;
+            vec3 colorTint;
+            float randomSeed01 = rand(floor (uv /aCellLenght));
+            float randomSeed02 = rand(floor (uv /aCellLenght) + 5.0);
+            float randomSeed03 = rand(floor (uv /aCellLenght) + 10.0);
+              
+            
+              colorTint= vec3(randomSeed01, randomSeed02, randomSeed03);
+              
+            float circleLenght =abs(sin(iTime * randomSeed03 + randomSeed02))  * randomSeed01 * aCellLenght;
+            
+            float jitterFreedom = 0.5 - circleLenght;
+            float jitterAmountX =  jitterFreedom * (randomSeed03 *2.0 -1.0);
+            float jitterAmounty =  jitterFreedom * (randomSeed01 *2.0 -1.0); 
+            vec2 coord =  fract(uv / aCellLenght);
+              
+              
+            coord -= 0.5;
+            float z = 0.0;
+            vec3 toReturn; 
+            for(int i=0; i < 3; i++) {
+                z += 0.015 * celluar2x2(coord + iTime * 0.1).x  /*abs(sin(iTime * randomSeed01 + randomSeed01))*/;
+              coord += z;
+              toReturn[i] = 1.0 - smoothstep(circleLenght- 30.5/iResolution.y,
+                                                circleLenght, distance(coord, vec2(jitterAmountX, jitterAmounty)));
+            }
+              
+            toReturn = mix(color.xyz, colorTint *toReturn, length(toReturn));
+            color = vec4(toReturn.xyz, 0.1);
+          }
+
+
+          void mainImage( out vec4 fragColor, in vec2 fragCoord )
+          {
+            vec2 uv = fragCoord.xy / iResolution.y;
+              float screenXLenght = iResolution.x/ iResolution.y;
+              
+              vec4 endColor = vec4(.0);
+              
+              uv.x -= screenXLenght/2.0; 
+              uv.y -= 0.5;
+              
+              
+              DrawAParticleSet(endColor, uv, 0.1);
+              DrawAParticleSet(endColor, uv- 0.1, 0.15);
+              DrawAParticleSet(endColor, uv + 0.3, 0.17);
+            fragColor = vec4(endColor);
+          }
+        `;
+
+        const bgShader = new Shader(W, H, fragment2).addTo().bot();
+        
+        const sunShader = new Shader(450, 450, fragment)
+          .center(homePage)
+          .alp(0.9);
+
+        const playsoundbutton = new Button({
+          width: 80,
+          height: 80,
+          backgroundColor: lighter,
+          rollBackgroundColor: green,
+          corner: 40,
+          gradient: 0.3,
+          icon: makeIcon("sound", "dark").sca(1.1),
+        }).pos(W - 150, 50);
+
+        // Create an audio element for background music
+        const bgMusic = new Audio("assets/background-music.mp3");
+        bgMusic.loop = true;
+
+        const pausemusicbutton = new Button({
+          width: 80,
+          height: 80,
+          backgroundColor: lighter,
+          rollBackgroundColor: green,
+          corner: 40,
+          gradient: 0.3,
+          icon: makeIcon("mute", "dark").sca(1.1),
+        })
+          .pos(W - 150, 50)
+          .alp(0); // Start hidden
+
+        playsoundbutton.on("click", function () {
+          bgMusic.play();
+          playsoundbutton.alp(0);
+          pausemusicbutton.alp(1);
+        });
+
+        pausemusicbutton.on("click", function () {
+          bgMusic.pause();
+          pausemusicbutton.alp(0);
+          playsoundbutton.alp(1);
+        });
+
+        // When the button is clicked, hide the home page and show the game page.
+        playButton.on("click", () => {
+          console.log("Button clicked!");
+          homePage.alpha = 0;
+          gamePage.alpha = 1;
+        });
+
+        //-----------------------------------------
+        // (2) GAME PAGE: Spawn the bodies, handle info clicks, and trigger final system.
+        //-----------------------------------------
+        // Create a physics instance with boundaries so bodies don't leave the stage.
+        const physics = new Physics(0);
+        physics.drag(); // Enable drag functionality for the bodies.
+
+        // Spawn all bodies (Sun + 8 planets) on the game page.
+        spawnBodies();
+
+        // Function to spawn bodies with random starting positions along the edges.
+        function spawnBodies() {
+          // Define an array of 9 objects (Sun plus 8 planets) with their properties.
+          const planetData = [
+            {
+              name: "Sun",
+              color: "yellow",
+              radius: 40,
+              info: "The central star",
+              image: "assets/sun.png"
+            },
+            {
+              name: "Mercury",
+              color: "#bbb",
+              radius: 15,
+              info: "Closest planet to the Sun",
+              image: "assets/mercury.png"
+            },
+            {
+              name: "Venus",
+              color: "#FB8500",
+              radius: 20,
+              info: "Hot thick atmosphere",
+              image: "assets/venus.png"
+            },
+            {
+              name: "Earth",
+              color: "blue",
+              radius: 22,
+              info: "Our home planet",
+              image: "assets/earth.png"
+            },
+            { 
+              name: "Mars", 
+              color: "red", 
+              radius: 18, 
+              info: "The Red Planet",
+              image: "assets/mars.png"
+            },
+            {
+              name: "Jupiter",
+              color: "#FFB703",
+              radius: 35,
+              info: "The largest planet",
+              image: "assets/jupiter.png"
+            },
+            {
+              name: "Saturn",
+              color: "yellow",
+              radius: 30,
+              info: "Famous rings",
+              image: "assets/saturn.png"
+            },
+            {
+              name: "Uranus",
+              color: "#00ffff",
+              radius: 25,
+              info: "Rotates on its side",
+              image: "assets/uranus.png"
+            },
+            {
+              name: "Neptune",
+              color: "purple",
+              radius: 25,
+              info: "Farthest known planet",
+              image: "assets/neptune.png"
+            },
+          ];
+
+          // We only require 2 non‑Sun planet info clicks to trigger the final system.
+          let infoSeenCount = 0;
+          const totalPlanets = 9; // Threshold: 2 non‑Sun planets clicked.
+
+          // Create a container for info popups.
+          const infoContainer = new Container().center(gamePage);
+          // Array to hold references to spawned body objects.
+          const planets = [];
+
+          // Loop over each item in the planetData array.
+          loop(planetData, (pd) => {
+            // Choose a random side (1=top, 2=bottom, 3=left, 4=right) for spawning.
+            const side = Math.floor(rand(1, 5));
+            let startX, startY, impulseX, impulseY;
+            if (side === 1) {
+              // Spawn along the top edge
+              startX = rand(pd.radius, W - pd.radius);
+              startY = pd.radius + 10;
+              impulseX = rand(-20, 20); // Reduced from (-100, 100)
+              impulseY = rand(30, 50); // Reduced from (150, 250)
+            } else if (side === 2) {
+              // Spawn along the bottom edge
+              startX = rand(pd.radius, W - pd.radius);
+              startY = H - pd.radius - 10;
+              impulseX = rand(-20, 20); // Reduced from (-100, 100)
+              impulseY = -rand(30, 50); // Reduced from (150, 250)
+            } else if (side === 3) {
+              // Spawn along the left edge
+              startX = pd.radius + 10;
+              startY = rand(pd.radius, H - pd.radius);
+              impulseX = rand(30, 50); // Reduced from (150, 250)
+              impulseY = rand(-20, 20); // Reduced from (-100, 100)
+            } else {
+              // Spawn along the right edge
+              startX = W - pd.radius - 10;
+              startY = rand(pd.radius, H - pd.radius);
+              impulseX = -rand(30, 50); // Reduced from (150, 250)
+              impulseY = rand(-20, 20); // Reduced from (-100, 100)
+            }
+
+            // Adjust the physics properties for smoother movement
+            const body = new Pic({
+              file: pd.image,
+              width: pd.radius * 2,
+              height: pd.radius * 2
+            })
+              .centerReg(gamePage)
+              .pos(startX, startY)
+              .addPhysics({
+                shape: "circle",
+                bounciness: 1.5,
+                friction: 0.2,
+                density: 1,
+                linearDamping: 0.5, // Added to create more space-like movement
+              });
+
+            // Apply an impulse to give the body initial motion.
+            body.impulse(impulseX, impulseY);
+
+            // When the body is clicked, show a popup with its name and info.
+            body.on("click", () => {
+              infoContainer.removeAllChildren(); // Clear any existing popups.
+              const popup = new Label({
+                text: pd.name + "\n" + pd.info,
+                size: 20,
+                color: white,
+                backing: new Circle(100, "#222"),
+                //corner: 16,
+                align: "center",
+                valign: "center",
+              })
+                .centerReg(infoContainer)
+                .pos(0, 0);
+
+              // Animate the popup to fade out over 2 seconds.
+              animate(popup, { alpha: 0 }, 3, null, () => popup.removeFrom());
+
+              // If the body is not the Sun and hasn't been clicked before, mark it as seen and increment the counter.
+              if (pd.name !== "Sun" && !pd.seen) {
+                pd.seen = true;
+                infoSeenCount++;
+                console.log(
+                  "Clicked:",
+                  pd.name,
+                  "infoSeenCount =",
+                  infoSeenCount
+                );
+                // When all 9 planets have been clicked, trigger the final system.
+                if (infoSeenCount === totalPlanets) {
+                  formFinalSystem(planets, planetData);
+                }
+              }
+            });
+            // Add the spawned body to the planets array.
+            planets.push(body);
+          });
+
+          // ----------------------------------------------------
+          // Snap Placeholders & Orbit Drawing (Optional)
+          // ----------------------------------------------------
+          const orbitContainer = new Container().center(gamePage).alp(0);
+          const placeholders = [];
+          const orbitRadii = [100, 150, 200, 250, 300, 350, 400, 450, 500];
+          loop(orbitRadii, (r) => {
+            const orbit = new Shape().center(orbitContainer);
+            orbit.graphics
+              .ss(2)
+              .s("white")
+              .setStrokeDash([4, 8])
+              .arc(0, 0, r, 0, Math.PI * 2);
+            let angleDeg = rand(0, 360);
+            let radAngle = (angleDeg * Math.PI) / 180;
+            let orbitX = r * Math.cos(radAngle);
+            let orbitY = r * Math.sin(radAngle);
+            new Circle(5, "rgba(0,0,0,0)")
+              .center(orbitContainer)
+              .pos(orbitX, orbitY);
+            placeholders.push({ x: orbitX, y: orbitY });
+          });
+
+          // When any planet is dragged, reveal the orbit container.
+          let orbitsVisible = false;
+          loop(planets, (planet) => {
+            planet.on("pressmove", () => {
+              if (!orbitsVisible) {
+                orbitsVisible = true;
+                animate(orbitContainer, { alpha: 0.6 }, 1, "linear");
+              }
+            });
+          });
+
+          // Optional Snap Logic: when a planet is released, if it's close enough to a placeholder, snap it.
+          const snapSound = new Audio("assets/snap.mp3");
+          let snappedPlanets = 0;
+          const correctOrbits = {
+            Mercury: 0, // Goes on the 100 radius orbit (closest to Sun)
+            Venus: 1, // Goes on the 150 radius orbit
+            Earth: 2, // Goes on the 200 radius orbit
+            Mars: 3, // Goes on the 250 radius orbit
+            Jupiter: 4, // Goes on the 300 radius orbit
+            Saturn: 5, // Goes on the 350 radius orbit
+            Uranus: 6, // Goes on the 400 radius orbit
+            Neptune: 7, // Goes on the 450 radius orbit
+            Sun: -1, // Should be at center (0,0)
+          };
+
+          loop(planets, (planet, planetIndex) => {
+            planet.on("pressup", () => {
+              const planetName = planetData[planetIndex].name;
+              const centerDist = Math.sqrt(
+                Math.pow(planet.x, 2) + Math.pow(planet.y, 2)
+              );
+
+              // Special case for Sun
+              if (planetName === "Sun") {
+                if (centerDist < 20) {
+                  // If Sun is near center
+                  animate(planet, { x: 0, y: 0 }, 0.3, "ease-out", () => {
+                    physics.remove(planet);
+                    snapSound.currentTime = 0;
+                    snapSound.play();
+
+                    if (!planet.isSnapped) {
+                      planet.isSnapped = true;
+                      snappedPlanets++;
+                      console.log(
+                        `Sun correctly placed in center. Total: ${snappedPlanets}`
+                      );
+
+                      // Add this check for the Sun too
+                      if (snappedPlanets === 9) {
+                        timeout(1, () => {
+                          formFinalSystem(planets, planetData);
+                        });
+                      }
+                    }
+                  });
+                } else {
+                  console.log(
+                    `Sun should be in center. Current distance: ${centerDist}`
+                  );
+                  planet.impulse(rand(-5, 5), rand(-5, 5));
+                }
+                return;
+              }
+
+              // Handle other planets as before
+              const correctOrbitIndex = correctOrbits[planetName];
+              const correctRadius = orbitRadii[correctOrbitIndex];
+
+              console.log(
+                `Planet: ${planetName}, Distance: ${centerDist}, Should be: ${correctRadius}`
+              );
+
+              if (Math.abs(centerDist - correctRadius) < 20) {
+                const angle = Math.atan2(planet.y, planet.x);
+                const snapX = correctRadius * Math.cos(angle);
+                const snapY = correctRadius * Math.sin(angle);
+
+                animate(planet, { x: snapX, y: snapY }, 0.3, "ease-out", () => {
+                  physics.remove(planet);
+                  snapSound.currentTime = 0;
+                  snapSound.play();
+
+                  if (!planet.isSnapped) {
+                    planet.isSnapped = true;
+                    snappedPlanets++;
+
+                    console.log(
+                      `Correctly placed: ${planetName}. Total: ${snappedPlanets}`
+                    );
+
+                    if (snappedPlanets === 9) {
+                      timeout(1, () => {
+                        formFinalSystem(planets, planetData);
+                      });
+                    }
+                  }
+                });
+              } else {
+                planet.impulse(rand(-5, 5), rand(-5, 5));
+              }
+            });
+          });
+        }
+
+        //-----------------------------------------
+        // (2.5) FINAL SYSTEM: Build the final revolving system.
+        //-----------------------------------------
+        // This function is triggered when all 9 planets have been clicked.
+        function formFinalSystem(planets, planetData) {
+          console.log(
+            "All 9 planets snapped - forming final system with spin!"
+          );
+
+          // Remove all bodies from physics.
+          loop(planets, (p) => physics.remove(p));
+          // Fade out the current game page quickly (20ms)
+          animate(gamePage, { alpha: 0 }, 2.5, "linear", () => {
+            // Once fade-out is complete, remove all children from the game page and dispose of the physics engine.
+            gamePage.removeAllChildren();
+            physics.dispose();
+
+            // Fade gamePage back in.
+            gamePage.alpha = 1;
+
+            // Define fixed final orbit radii (index 0 for Sun, then Mercury..Neptune) in order: 0 => Sun, 1 => Mercury, 2 => Venus, 3 => Earth, etc.
+            const finalOrbitRadii = [0, 100, 140, 180, 220, 280, 340, 400, 460];
+
+            // Draw final orbit circles.
+            const finalOrbitContainer = new Container().center(gamePage);
+            loop(finalOrbitRadii, (r, i) => {
+              if (i === 0) return; // Skip orbit for the Sun
+              new Shape()
+                .center(finalOrbitContainer)
+                .graphics.ss(2)
+                .s("white")
+                .arc(0, 0, r, 0, Math.PI * 2);
+            });
+
+            // Place the final bodies in their fixed positions
+            loop(planetData, (pd, i) => {
+              let circle;
+              if (pd.image) {
+                // Use Pic if image is available
+                circle = new Pic({
+                  file: pd.image,
+                  width: pd.radius * 2,
+                  height: pd.radius * 2
+                }).centerReg(finalOrbitContainer);
+              } else {
+                // Fallback to Circle if no image
+                circle = new Circle(pd.radius, pd.color).centerReg(finalOrbitContainer);
+              }
+
+              if (pd.name === "Sun") {
+                // Place the Sun at the center
+                circle.centerReg().center(); // Position at container's center
+              } else {
+                // Place each planet at its designated orbit radius
+                const r = finalOrbitRadii[i];
+                circle.pos(r, 0); // Position relative to container
+                // Revolve around container center (0,0) rather than screen center
+                revolve(circle, 0, 0, r, 0.002 * (i + 1));
+              }
+            });
+
+            // After 6 seconds of final revolve animation, transition to the end page.
+            timeout(6, () => {
+              gamePage.animate({ alpha: 0 }, 1, "linear", () => {
+                endPage.alpha = 1;
+              });
+            });
+          });
+        }
+
+        //-----------------------------------------
+        // Revised revolve helper:
+        // This function attaches an on-tick event to the object so it revolves around the point (cx, cy) at a given radius and speed.
+        //-----------------------------------------
+        function revolve(obj, cx, cy, radius, speed = 1) {
+          obj.angle = 0; // Initialize the angle property on the object.
+          obj.on("tick", () => {
+            obj.angle += speed; // Increment the angle each tick.
+            // Update the object's position to remain on the circle defined by the center (cx, cy) and radius.
+            obj.x = cx + radius * Math.cos(obj.angle);
+            obj.y = cy + radius * Math.sin(obj.angle);
+          });
+        }
+
+        //-----------------------------------------
+        // (3) END PAGE: Display a congratulatory message and a Restart button.
+        //-----------------------------------------
+        const congratsLabel = new LabelOnArc(
+          "Solar System Completed!",
+          40,
+          "Paytone One",
+          white,
+          310
+        )
+          .centerReg(endPage)
+          .pos(0, -100)
+          .alp(0.9)
+          .wiggle("rotation", 0, 1, 3, 1.5, 2.5);
+
+        loop(5, (i) => {
+          // Skip the center circle (replaced by button)
+          if (i === 0) return;
+          
+         
+          let alpha;
+          if (i === 1) {
+            alpha = 0.3; 
+          } else {
+            alpha = 0.6 * Math.pow(0.6, i-1); 
+          }
+          new Circle(200 + i * 100, black.toAlpha(alpha))
+            .center(endPage)
+            .wiggle("scale", 1, 0.01, 0.03, 1, 2);
+        });
+
+        
+        const restartCircle = new Circle(200, black.toAlpha(0.9))
+          .center(endPage)
+          .wiggle("scale", 1, 0.01, 0.03, 1, 2);
+        
+        
+        const restartLabel = new Label({
+          text: "Restart",
+          size: 30,
+          color: white,
+          align: "center",
+          valign: "center"
+        })
+          .center(endPage)
+          .alp(0.9);
+        
+        //mouseover effect
+        restartCircle.on("mouseover", () => {
+          restartCircle.animate({color: orange}, 0.3);
+        });
+        
+        restartCircle.on("mouseout", () => {
+          restartCircle.animate({color: black.toAlpha(0.9)}, 0.3);
+        });
+        
+        
+        restartCircle.on("click", () => {
+          endPage.alpha = 0;
+          homePage.alpha = 1;
+        });
+        
+        restartLabel.on("click", () => {
+          endPage.alpha = 0;
+          homePage.alpha = 1;
+        });
+      } // end ready
+    </script>
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+  </head>
+  <body></body>
+</html>
