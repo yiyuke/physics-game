@@ -119,49 +119,63 @@
               color: "yellow",
               radius: 40,
               info: "The central star",
+              image: "assets/sun.png"
             },
             {
               name: "Mercury",
               color: "#bbb",
               radius: 15,
               info: "Closest planet to the Sun",
+              image: "assets/mercury.png"
             },
             {
               name: "Venus",
               color: "#FB8500",
               radius: 20,
               info: "Hot thick atmosphere",
+              image: "assets/venus.png"
             },
             {
               name: "Earth",
               color: "blue",
               radius: 22,
               info: "Our home planet",
+              image: "assets/earth.png"
             },
-            { name: "Mars", color: "red", radius: 18, info: "The Red Planet" },
+            { 
+              name: "Mars", 
+              color: "red", 
+              radius: 18, 
+              info: "The Red Planet",
+              image: "assets/mars.png"
+            },
             {
               name: "Jupiter",
               color: "#FFB703",
               radius: 35,
               info: "The largest planet",
+              image: "assets/jupiter.png"
             },
             {
               name: "Saturn",
               color: "yellow",
               radius: 30,
               info: "Famous rings",
+              image: "assets/saturn.png"
             },
             {
               name: "Uranus",
               color: "#00ffff",
               radius: 25,
               info: "Rotates on its side",
+              image: "assets/uranus.png"
             },
             {
               name: "Neptune",
               color: "purple",
               radius: 25,
               info: "Farthest known planet",
+              image: "assets/neptune.png"
             },
           ];
 
@@ -206,7 +220,11 @@
             }
 
             // Adjust the physics properties for smoother movement
-            const body = new Circle(pd.radius, pd.color)
+            const body = new Pic({
+              file: pd.image,
+              width: pd.radius * 2,
+              height: pd.radius * 2
+            })
               .centerReg(gamePage)
               .pos(startX, startY)
               .addPhysics({
@@ -423,9 +441,18 @@
 
             // Place the final bodies in their fixed positions
             loop(planetData, (pd, i) => {
-              const circle = new Circle(pd.radius, pd.color).centerReg(
-                finalOrbitContainer
-              ); // Add to orbit container instead of gamePage
+              let circle;
+              if (pd.image) {
+                // Use Pic if image is available
+                circle = new Pic({
+                  file: pd.image,
+                  width: pd.radius * 2,
+                  height: pd.radius * 2
+                }).centerReg(finalOrbitContainer);
+              } else {
+                // Fallback to Circle if no image
+                circle = new Circle(pd.radius, pd.color).centerReg(finalOrbitContainer);
+              }
 
               if (pd.name === "Sun") {
                 // Place the Sun at the center
