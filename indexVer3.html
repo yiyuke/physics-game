@@ -11,7 +11,7 @@
 
       // Create a new ZIM Frame that fits the window.
       // The frame is set to a 1024×1024 size (with black background and white text).
-      new Frame(FIT, 1024, 1024, "#030175", black, ready, "gf_Rubik+Pixels");
+      new Frame(FIT, 1024, 1024, "#010140", black, ready, "gf_Rubik+Pixels");
 
       // The main ready() function runs when the frame is ready.
       function ready() {
@@ -23,6 +23,7 @@
         const homePage = new Container().center();
         const gamePage = new Container().center().alp(0);
         const endPage = new Container().center().alp(0);
+        const backgroundImage = new Pic("assets/bgpic.jpg").addTo().bot().alp(.3).sca(0.38);
 
         //-----------------------------------------
         // (1) HOME PAGE: Display the question and "Get to know" button.
@@ -575,7 +576,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
             const orbit = new Shape().center(orbitContainer);
             orbit.graphics
               .ss(2)
-              .s("white")
+              .s("#8CDBFF")
               .setStrokeDash([4, 8])
               .arc(0, 0, r, 0, Math.PI * 2);
             let angleDeg = rand(0, 360);
@@ -723,8 +724,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
               if (i === 0) return; // Skip orbit for the Sun
               new Shape()
                 .center(finalOrbitContainer)
-                .graphics.ss(2)
-                .s("white")
+                .graphics.ss(1)
+                .s("#8CDBFF")
                 .arc(0, 0, r, 0, Math.PI * 2);
             });
 
