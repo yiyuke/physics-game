@@ -11,7 +11,7 @@
 
       // Create a new ZIM Frame that fits the window.
       // The frame is set to a 1024×1024 size (with black background and white text).
-      new Frame(FIT, 1024, 1024, "#219EBC", black, ready, "gf_Paytone+One");
+      new Frame(FIT, 1024, 1024, "#030175", black, ready, "gf_Paytone+One");
 
       // The main ready() function runs when the frame is ready.
       function ready() {
@@ -28,7 +28,16 @@
         // (1) HOME PAGE: Display the question and "Get to know" button.
         //-----------------------------------------
         loop(5, (i) => {
-          new Circle(200 + i * 100, interstellar.toAlpha(0.15))
+          // 使用指数衰减使外圈更浅，特别调整第二个圆圈(i=1)的透明度
+          let alpha;
+          if (i === 0) {
+            alpha = 0.9; // 中间最深的圆圈保持不变
+          } else if (i === 1) {
+            alpha = 0.3; // 第二个圆圈特别调浅
+          } else {
+            alpha = 0.6 * Math.pow(0.6, i-1); // 其他圆圈保持原来的衰减
+          }
+          new Circle(200 + i * 100, black.toAlpha(alpha))
             .center(homePage)
             .wiggle("scale", 1, 0.01, 0.03, 1, 2);
         });
@@ -54,6 +63,198 @@
           .alp(0.8)
           .center(homePage)
           .wiggle("rotation", 0, 1, 3, 1.5, 2.5);
+
+        // 添加太阳渲染Shader
+        const fragment = `
+// If you want to use this shader in a space whatsever feel free!
+// CC-BY-3.0 Johannes Jendersie
+//
+// General technical overview:
+// First there is a fractal value noise (2d) which is wrapped onto a sphere.
+// This noise can be interpreted as temperature which is color mapped
+// at the end. A third noise dimension is used for the time.
+// Then, solar storms are added by raymarching the surrounding of the sphere
+// by a combination of different step strategies:
+//   * Using ray intersections with larger spheres
+//   * Using ray intersections with cones of different opening angle
+//     which start in the sun and are oriented towards the camera.
+// The first strategie gives good results for perpendicular rays,
+// whereas the second yields artifact free results in the tangential plane.
+// Both are combined by interpolation to create a smooth animated radial
+// burst effect.
+
+// The constants below are meant to be set from a game or other application side.
+const vec3 SUN_CENTER = vec3(0.0);
+const vec3 CAM_POS = vec3(0.0, 0.0, 8.0);
+const float SUN_RADIUS = 0.9;
+const float STORM_RADIUS = 0.7;
+
+// Get the closest point between ray and sphere. If the ray hits the sphere
+// this is a point on the surface. Otherwise, it is in the tangential plane.
+vec3 raySphereCP(vec3 spherePos, float radius, vec3 rayOrigin, vec3 rayDirection, out float mask, out float t, out float r)
+{
+    vec3 p = spherePos - rayOrigin;
+    // Distance to the closest point between ray and sphere
+	t = dot( rayDirection, p );
+    // Distance between ray origin and center
+    float l = dot( p, p );
+    // If inside the root is positive. Go back to the surface in this case
+    r = l - t * t;
+    mask = radius * radius <= r ? 0.0 : 1.0;
+    t -= sqrt(max(0.0, radius * radius - r));
+	return rayOrigin + rayDirection * t;
+}
+
+// Find ray-cone intersection assuming the rays origin is on the cone axis.
+float simpleRayCone(vec3 rayOToConeO, vec3 rayDirection, float coneAngle, float sinConeAngle, float rcDist)
+{
+    // Compute the ray-to-cone side length of the triangle (RO, CO, intersection)
+    // using the sin rule.
+    float sinC = sin(3.1415926 - acos(dot(rayDirection, rayOToConeO) / rcDist) - coneAngle);
+    return sinConeAngle * rcDist / sinC;
+}
+
+// 简单的噪声函数替代iChannel0纹理
+float hash(vec3 p) {
+    p = fract(p * vec3(123.34, 456.21, 789.92));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y * p.z);
+}
+
+float noise(vec3 x) {
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+    f = f*f*(3.0-2.0*f);
+    
+    float n000 = hash(p);
+    float n100 = hash(p + vec3(1.0, 0.0, 0.0));
+    float n010 = hash(p + vec3(0.0, 1.0, 0.0));
+    float n110 = hash(p + vec3(1.0, 1.0, 0.0));
+    float n001 = hash(p + vec3(0.0, 0.0, 1.0));
+    float n101 = hash(p + vec3(1.0, 0.0, 1.0));
+    float n011 = hash(p + vec3(0.0, 1.0, 1.0));
+    float n111 = hash(p + vec3(1.0, 1.0, 1.0));
+    
+    return mix(
+        mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+        mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y),
+        f.z
+    );
+}
+
+float sunSurfaceNoise(vec3 spos, float time)
+{
+    float s = 0.28;
+    float detail = 3.0;
+    for(int i = 0; i < 4; ++i)
+    {
+        float warp = noise(spos*8.0 * detail + time);
+        float n = noise(vec3(spos.xy * detail / spos.z + vec2(warp, 0.0), time * detail / 10.0 + float(i) * 0.618033989));
+        n = pow(n, 5.0-float(i));
+        s += n / detail;
+        detail *= 1.847;
+    }
+    return s;
+}
+
+// AAARRRG: no for loop with variable count in WebGL. May use only one function with 2 or 4 octaves.
+float sunSurfaceNoise2(vec3 spos, float time)
+{
+    float s = 0.28;
+    float detail = 3.0;
+    for(int i = 0; i < 2; ++i)
+    {
+        float warp = noise(spos*8.0 * detail + time);
+        float n = noise(vec3(spos.xy * detail / spos.z + vec2(warp, 0.0), time * detail / 10.0 + float(i) * 0.618033989));
+        n = pow(n, 5.0-float(i));
+        s += n / detail;
+        detail *= 1.847;
+    }
+    return s;
+}
+
+// Compute solar storm heat for a single point somewhere outside the
+// sphere.
+float solarStorm(vec3 pos, float time)
+{
+    float l = length(pos);
+    float surfaceDist = (l - SUN_RADIUS) / STORM_RADIUS;
+    float f = sunSurfaceNoise2(pos / l, time - surfaceDist * 8.0 * STORM_RADIUS) - surfaceDist * surfaceDist - 0.35;
+    return max(0.0, f);
+}
+
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    float time = iTime * 0.5;
+	vec2 uv = fragCoord.xy / iResolution.xy;
+    uv -= 0.5;
+    uv.x *= iResolution.x / iResolution.y;
+    
+    vec3 viewDir = normalize(vec3(uv, -3.0));
+    float mask = 0.0, t, r;
+    vec3 spos = raySphereCP(SUN_CENTER, SUN_RADIUS, CAM_POS, viewDir, mask, t, r);
+    
+    float value = 0.0;
+
+    // Noise on the sphere surface itself (masked in non sphere regions)
+    float s = sunSurfaceNoise(spos, time);
+    value = s * mask;
+    
+    // Extremly bright areas...
+    value *= 1.9;
+    value = pow(value, 4.0) * 5.0;
+    if(value > 5.0) value *= 8.0;
+    
+    vec3 camToSun = SUN_CENTER - CAM_POS;
+    float dist = length(camToSun);
+    float cosMax = SUN_RADIUS / dist;
+    float maxAngle = acos(cosMax);
+    float cosVtimesL = dot( viewDir, camToSun );
+    float cosVMax = t / dist;
+    
+    // Solar storms
+    float storm = 0.0;
+    for(int i = 1; i <= 9; ++i)
+    {
+        float step = (float(i) ) * 0.02;
+        
+        // Projection to another sphere with a larger radius:
+        // good quality for bursts in view direction.
+        float radius = SUN_RADIUS + step;
+        float t0 = (cosVtimesL - sqrt(max(0.0, radius * radius - r)));
+        
+        // Projection to a cone starting in the sun center and pointing into
+        // viewer direction: good quality for tangential bursts.
+        float angle = float(i) / 11.0 * maxAngle;
+        float t1 = simpleRayCone(camToSun, viewDir, angle, sin(angle), dist);
+        
+        float tf = mix(t1, t0, pow(max(cosVtimesL / dist - cosVMax, 0.0) / (1.0 - cosVMax), 5.0));
+        vec3 spacePos = CAM_POS + viewDir * tf;
+        s = solarStorm(spacePos, time);
+        storm += s * s;
+    }
+    value += storm * 300.0;
+    
+    // 最终颜色
+    vec3 sunColor = value * vec3(1.0, 0.2, 0.05);
+    
+    // 添加一些额外的光晕效果
+    float glow = 0.02 / (length(uv) + 0.01);
+    vec3 glowColor = vec3(1.0, 0.3, 0.05) * glow * glow * 0.5;
+    
+    // 平滑的透明度过渡
+    float alpha = smoothstep(0.01, 0.05, length(sunColor));
+    
+    // 最终输出
+    fragColor = vec4(sunColor + glowColor, alpha);
+}
+`;
+
+        // 创建shader并添加到homepage中间
+        const sunShader = new Shader(450, 450, fragment)
+          .center(homePage)
+          .alp(0.9);
 
         const playsoundbutton = new Button({
           width: 80,
