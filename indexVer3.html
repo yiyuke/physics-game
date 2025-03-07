@@ -11,7 +11,7 @@
 
       // Create a new ZIM Frame that fits the window.
       // The frame is set to a 1024×1024 size (with black background and white text).
-      new Frame(FIT, 1024, 1024, "#010140", black, ready, "gf_Rubik+Pixels");
+      new Frame(FIT, 1024, 1024, "#010140", black, ready, "gf_Dancing+Script");
 
       // The main ready() function runs when the frame is ready.
       function ready() {
@@ -46,7 +46,7 @@
         const title = new LabelOnArc(
           "The Cosmic Dance",
           80,
-          "Rubik+Pixels",
+          "Dancing+Script",
           white,
           310
         )
@@ -57,7 +57,7 @@
         const playButton = new LabelOnArc(
           "Play to learn",
           40,
-          "Rubik+Pixels",
+          "Dancing+Script",
           white,
           -360
         )
@@ -784,8 +784,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         //-----------------------------------------
         const congratsLabel = new LabelOnArc(
           "Solar System Completed!",
-          40,
-          "Rubik+Pixels",
+          80,
+          "Dancing+Script",
           white,
           310
         )
@@ -818,8 +818,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         
         const restartLabel = new Label(
           "Restart",
-          30,
-          "Rubik+Pixels",
+          40,
+          "Dancing+Script",
           white,
         )
           .center(endPage)
