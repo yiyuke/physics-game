@@ -388,183 +388,186 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
           console.log("Button clicked!");
           homePage.alpha = 0;
           gamePage.alpha = 1;
+          startGame();
         });
 
         //-----------------------------------------
         // (2) GAME PAGE: Spawn the bodies, handle info clicks, and trigger final system.
         //-----------------------------------------
         // Create a physics instance with boundaries so bodies don't leave the stage.
-        const physics = new Physics(0);
-        physics.drag(); // Enable drag functionality for the bodies.
+        function startGame() {
+          const physics = new Physics(0);
+          physics.drag(); // Enable drag functionality for the bodies.
 
-        // Spawn all bodies (Sun + 8 planets) on the game page.
-        spawnBodies();
+          // Spawn all bodies (Sun + 8 planets) on the game page.
+          spawnBodies();
 
-        // Function to spawn bodies with random starting positions along the edges.
-        function spawnBodies() {
-          // Define an array of 9 objects (Sun plus 8 planets) with their properties.
-          const planetData = [
-            {
-              name: "Sun",
-              color: "yellow",
-              radius: 40,
-              info: "The central star",
-              image: "assets/sun.png"
-            },
-            {
-              name: "Mercury",
-              color: "#bbb",
-              radius: 15,
-              info: "Closest planet to the Sun",
-              image: "assets/mercury.png"
-            },
-            {
-              name: "Venus",
-              color: "#FB8500",
-              radius: 20,
-              info: "Hot thick atmosphere",
-              image: "assets/venus.png"
-            },
-            {
-              name: "Earth",
-              color: "blue",
-              radius: 22,
-              info: "Our home planet",
-              image: "assets/earth.png"
-            },
-            { 
-              name: "Mars", 
-              color: "red", 
-              radius: 18, 
-              info: "The Red Planet",
-              image: "assets/mars.png"
-            },
-            {
-              name: "Jupiter",
-              color: "#FFB703",
-              radius: 35,
-              info: "The largest planet",
-              image: "assets/jupiter.png"
-            },
-            {
-              name: "Saturn",
-              color: "yellow",
-              radius: 30,
-              info: "Famous rings",
-              image: "assets/saturn.png"
-            },
-            {
-              name: "Uranus",
-              color: "#00ffff",
-              radius: 25,
-              info: "Rotates on its side",
-              image: "assets/uranus.png"
-            },
-            {
-              name: "Neptune",
-              color: "purple",
-              radius: 25,
-              info: "Farthest known planet",
-              image: "assets/neptune.png"
-            },
-          ];
+          // Function to spawn bodies with random starting positions along the edges.
+          function spawnBodies() {
+            // Define an array of 9 objects (Sun plus 8 planets) with their properties.
+            const planetData = [
+              {
+                name: "Sun",
+                color: "yellow",
+                radius: 40,
+                info: "The central star",
+                image: "assets/sun.png"
+              },
+              {
+                name: "Mercury",
+                color: "#bbb",
+                radius: 15,
+                info: "Closest planet to the Sun",
+                image: "assets/mercury.png"
+              },
+              {
+                name: "Venus",
+                color: "#FB8500",
+                radius: 20,
+                info: "Hot thick atmosphere",
+                image: "assets/venus.png"
+              },
+              {
+                name: "Earth",
+                color: "blue",
+                radius: 22,
+                info: "Our home planet",
+                image: "assets/earth.png"
+              },
+              { 
+                name: "Mars", 
+                color: "red", 
+                radius: 18, 
+                info: "The Red Planet",
+                image: "assets/mars.png"
+              },
+              {
+                name: "Jupiter",
+                color: "#FFB703",
+                radius: 35,
+                info: "The largest planet",
+                image: "assets/jupiter.png"
+              },
+              {
+                name: "Saturn",
+                color: "yellow",
+                radius: 30,
+                info: "Famous rings",
+                image: "assets/saturn.png"
+              },
+              {
+                name: "Uranus",
+                color: "#00ffff",
+                radius: 25,
+                info: "Rotates on its side",
+                image: "assets/uranus.png"
+              },
+              {
+                name: "Neptune",
+                color: "purple",
+                radius: 25,
+                info: "Farthest known planet",
+                image: "assets/neptune.png"
+              },
+            ];
 
-          // We only require 2 non‑Sun planet info clicks to trigger the final system.
-          let infoSeenCount = 0;
-          const totalPlanets = 9; // Threshold: 2 non‑Sun planets clicked.
+            // We only require 2 non‑Sun planet info clicks to trigger the final system.
+            let infoSeenCount = 0;
+            const totalPlanets = 9; // Threshold: 2 non‑Sun planets clicked.
 
-          // Create a container for info popups.
-          const infoContainer = new Container().center(gamePage);
-          // Array to hold references to spawned body objects.
-          const planets = [];
+            // Create a container for info popups.
+            const infoContainer = new Container().center(gamePage);
+            // Array to hold references to spawned body objects.
+            const planets = [];
 
-          // Loop over each item in the planetData array.
-          loop(planetData, (pd) => {
-            // Choose a random side (1=top, 2=bottom, 3=left, 4=right) for spawning.
-            const side = Math.floor(rand(1, 5));
-            let startX, startY, impulseX, impulseY;
-            if (side === 1) {
-              // Spawn along the top edge
-              startX = rand(pd.radius, W - pd.radius);
-              startY = pd.radius + 10;
-              impulseX = rand(-20, 20); // Reduced from (-100, 100)
-              impulseY = rand(30, 50); // Reduced from (150, 250)
-            } else if (side === 2) {
-              // Spawn along the bottom edge
-              startX = rand(pd.radius, W - pd.radius);
-              startY = H - pd.radius - 10;
-              impulseX = rand(-20, 20); // Reduced from (-100, 100)
-              impulseY = -rand(30, 50); // Reduced from (150, 250)
-            } else if (side === 3) {
-              // Spawn along the left edge
-              startX = pd.radius + 10;
-              startY = rand(pd.radius, H - pd.radius);
-              impulseX = rand(30, 50); // Reduced from (150, 250)
-              impulseY = rand(-20, 20); // Reduced from (-100, 100)
-            } else {
-              // Spawn along the right edge
-              startX = W - pd.radius - 10;
-              startY = rand(pd.radius, H - pd.radius);
-              impulseX = -rand(30, 50); // Reduced from (150, 250)
-              impulseY = rand(-20, 20); // Reduced from (-100, 100)
-            }
-
-            // Adjust the physics properties for smoother movement
-            const body = new Pic({
-              file: pd.image,
-              width: pd.radius * 2,
-              height: pd.radius * 2
-            })
-              .centerReg(gamePage)
-              .pos(startX, startY)
-              .addPhysics({
-                shape: "circle",
-                bounciness: 1.5,
-                friction: 0.2,
-                density: 1,
-                linearDamping: 0.5, // Added to create more space-like movement
-              });
-
-            // Apply an impulse to give the body initial motion.
-            body.impulse(impulseX, impulseY);
-
-            // When the body is clicked, show a popup with its name and info.
-            body.on("click", () => {
-              infoContainer.removeAllChildren(); // Clear any existing popups.
-              const popup = new Label({
-                text: pd.name + "\n" + pd.info,
-                size: 20,
-                color: white,
-                backing: new Circle(100, "#222"),
-                //corner: 16,
-                align: "center",
-                valign: "center",
-              })
-                .centerReg(infoContainer)
-                .pos(0, 0);
-
-              // Animate the popup to fade out over 2 seconds.
-              animate(popup, { alpha: 0 }, 3, null, () => popup.removeFrom());
-
-              // If the body is not the Sun and hasn't been clicked before, mark it as seen and increment the counter.
-              if (pd.name !== "Sun" && !pd.seen) {
-                pd.seen = true;
-                infoSeenCount++;
-                console.log(
-                  "Clicked:",
-                  pd.name,
-                  "infoSeenCount =",
-                  infoSeenCount
-                );
-                // When all 9 planets have been clicked, trigger the final system.
-                if (infoSeenCount === totalPlanets) {
-                  formFinalSystem(planets, planetData);
-                }
+            // Loop over each item in the planetData array.
+            loop(planetData, (pd) => {
+              // Choose a random side (1=top, 2=bottom, 3=left, 4=right) for spawning.
+              const side = Math.floor(rand(1, 5));
+              let startX, startY, impulseX, impulseY;
+              if (side === 1) {
+                // Spawn along the top edge
+                startX = rand(pd.radius, W - pd.radius);
+                startY = pd.radius + 10;
+                impulseX = rand(-20, 20); // Reduced from (-100, 100)
+                impulseY = rand(30, 50); // Reduced from (150, 250)
+              } else if (side === 2) {
+                // Spawn along the bottom edge
+                startX = rand(pd.radius, W - pd.radius);
+                startY = H - pd.radius - 10;
+                impulseX = rand(-20, 20); // Reduced from (-100, 100)
+                impulseY = -rand(30, 50); // Reduced from (150, 250)
+              } else if (side === 3) {
+                // Spawn along the left edge
+                startX = pd.radius + 10;
+                startY = rand(pd.radius, H - pd.radius);
+                impulseX = rand(30, 50); // Reduced from (150, 250)
+                impulseY = rand(-20, 20); // Reduced from (-100, 100)
+              } else {
+                // Spawn along the right edge
+                startX = W - pd.radius - 10;
+                startY = rand(pd.radius, H - pd.radius);
+                impulseX = -rand(30, 50); // Reduced from (150, 250)
+                impulseY = rand(-20, 20); // Reduced from (-100, 100)
               }
+
+              // Adjust the physics properties for smoother movement
+              const body = new Pic({
+                file: pd.image,
+                width: pd.radius * 2,
+                height: pd.radius * 2
+              })
+                .centerReg(gamePage)
+                .pos(startX, startY)
+                .addPhysics({
+                  shape: "circle",
+                  bounciness: 1.5,
+                  friction: 0.2,
+                  density: 1,
+                  linearDamping: 0.5, // Added to create more space-like movement
+                });
+
+              // Apply an impulse to give the body initial motion.
+              body.impulse(impulseX, impulseY);
+
+              // When the body is clicked, show a popup with its name and info.
+              body.on("click", () => {
+                infoContainer.removeAllChildren(); // Clear any existing popups.
+                const popup = new Label({
+                  text: pd.name + "\n" + pd.info,
+                  size: 20,
+                  color: white,
+                  backing: new Circle(100, "#222"),
+                  //corner: 16,
+                  align: "center",
+                  valign: "center",
+                })
+                  .centerReg(infoContainer)
+                  .pos(0, 0);
+
+                // Animate the popup to fade out over 2 seconds.
+                animate(popup, { alpha: 0 }, 3, null, () => popup.removeFrom());
+
+                // If the body is not the Sun and hasn't been clicked before, mark it as seen and increment the counter.
+                if (pd.name !== "Sun" && !pd.seen) {
+                  pd.seen = true;
+                  infoSeenCount++;
+                  console.log(
+                    "Clicked:",
+                    pd.name,
+                    "infoSeenCount =",
+                    infoSeenCount
+                  );
+                  // When all 9 planets have been clicked, trigger the final system.
+                  if (infoSeenCount === totalPlanets) {
+                    formFinalSystem(planets, planetData);
+                  }
+                }
+              });
+              // Add the spawned body to the planets array.
+              planets.push(body);
             });
-            // Add the spawned body to the planets array.
-            planets.push(body);
-          });
+          
 
           // ----------------------------------------------------
           // Snap Placeholders & Orbit Drawing (Optional)
@@ -694,7 +697,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
             });
           });
         }
-
+      
         //-----------------------------------------
         // (2.5) FINAL SYSTEM: Build the final revolving system.
         //-----------------------------------------
@@ -760,11 +763,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
             timeout(6, () => {
               gamePage.animate({ alpha: 0 }, 1, "linear", () => {
                 endPage.alpha = 1;
+                finalOrbitContainer.removeFrom(gamePage);
               });
             });
           });
         }
-
+      }
         //-----------------------------------------
         // Revised revolve helper:
         // This function attaches an on-tick event to the object so it revolves around the point (cx, cy) at a given radius and speed.
@@ -834,6 +838,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         restartCircle.on("click", () => {
           endPage.alpha = 0;
           homePage.alpha = 1;
+          startGame();
         });
 
         restartLabel.on("click", () => {
